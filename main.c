@@ -103,5 +103,16 @@ __interrupt void WDT_ISR(void)
 #pragma vector=TIMER0_A1_VECTOR
 __interrupt void TIMER0_A1_ISR(void)
 {
+	// First reset all of the PWM outputs.
+	TA0CCTL0 = OUTMOD_0;
+	TA0CCTL1 = OUTMOD_0;
+	TA0CCTL2 = OUTMOD_0;
 
+	// Then arm them again ['set' mode].
+	TA0CCTL0 = OUTMOD_1;
+	TA0CCTL1 = OUTMOD_1;
+	TA0CCTL2 = OUTMOD_1;
+
+	// Now read TA0IV to get rid of the interrupt.
+	TA0IV;
 }
