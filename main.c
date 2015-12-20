@@ -63,9 +63,22 @@ static inline void configWDT(void)
 	WDTCTL = (WDTPW | WDTCTL) & ~WDTHOLD;
 }
 
+/*
+ * Configure TimerA0:
+ * - SMCLK source, divider /1.
+ * - Continuous mode.
+ * - No interrupts.
+ *
+ * - Output mode = set. [001]
+ * - TAIFG interrupt enabled [TAR overflow].
+ */
 static inline void configTimerA(void)
 {
-
+	TA0CTL = 0;	// Stop timerA0
+	TA0CCTL0 = OUTMOD_1;
+	TA0CCTL1 = OUTMOD_1;
+	TA0CCTL2 = OUTMOD_1;
+	TA0CTL = TASSEL_2 | MC_2 | TACLR | TAIE;
 }
 
 
@@ -87,8 +100,8 @@ __interrupt void WDT_ISR(void)
 	}
 }
 
-#pragma vector=TIMER0_A0_VECTOR
-__interrupt void TIMER0_A0_ISR(void)
+#pragma vector=TIMER0_A1_VECTOR
+__interrupt void TIMER0_A1_ISR(void)
 {
 
 }
