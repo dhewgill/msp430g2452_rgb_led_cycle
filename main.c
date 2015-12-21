@@ -28,12 +28,12 @@ static inline void updatePwm(volatile uint16_t * ta0_ccr_reg, int8_t * incr);
 
 
 /* Global Variables */
-const uint16_t gMinTimerVal = 128;
-const uint16_t gMaxTimerVal = 65408;
+const uint16_t G_MIN_TIMER_VAL = 128;
+const uint16_t G_MAX_TIMER_VAL = 65408;
 
 
-volatile uint8_t gSysFlags;
-volatile int8_t channel_incr[NUM_CHANNELS] = {8, 8, 8};
+volatile uint8_t g_sys_flags;
+int8_t g_channel_incr[NUM_CHANNELS] = {8, 8, 8};
 
 
 int main(void) {
@@ -48,12 +48,12 @@ int main(void) {
 
     while (1)						// Main Loop
     {
-    	if (gSysFlags & SYSFLG_UPDATE_PWM)
+    	if (g_sys_flags & SYSFLG_UPDATE_PWM)
     	{
-    		updatePwm(&TA0CCR0, channel_incr[0]);
-    		updatePwm(&TA0CCR1, channel_incr[1]);
-    		updatePwm(&TA0CCR2, channel_incr[2]);
-    		gSysFlags &= ~SYSFLG_UPDATE_PWM;
+    		updatePwm(&TA0CCR0, g_channel_incr[0]);
+    		updatePwm(&TA0CCR1, g_channel_incr[1]);
+    		updatePwm(&TA0CCR2, g_channel_incr[2]);
+    		g_sys_flags &= ~SYSFLG_UPDATE_PWM;
     	}
 
     	__bis_SR_register(LPM0_bits | GIE);
@@ -104,14 +104,14 @@ static inline void updatePwm(volatile uint16_t * ta0_ccr_reg, int8_t * incr)
 
 	tmp = *ta0_ccr_reg;
 	tmp += *incr;
-	if (tmp < gMinTimerVal)
+	if (tmp < G_MIN_TIMER_VAL)
 	{
-		tmp = gMinTimerVal;
+		tmp = G_MIN_TIMER_VAL;
 		*incr *= -1;
 	}
-	else if (tmp > gMaxTimerVal)
+	else if (tmp > G_MAX_TIMER_VAL)
 	{
-		tmp = gMaxTimerVal;
+		tmp = G_MAX_TIMER_VAL;
 		*incr *= -1;
 	}
 
