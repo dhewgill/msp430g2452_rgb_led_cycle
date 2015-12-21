@@ -16,18 +16,24 @@
 #define F_MCLK		16000000ul
 #define F_SMCLK		16000000ul
 
+#define SYSFLG_UPDATE_PWM	0x80
 
 /* Function Prototypes */
 static inline void configTimerA(void);
 static inline void configWDT(void);
+static inline void updatePwm(void);
 
 
 /* Type Definitions */
 
 
 /* Global Variables */
-volatile int8_t channel_incr[NUM_CHANNELS] = {1, 1, 1};
-volatile uint16_t* const ta0_pwm_regs[NUM_CHANNELS] = {&TA0CCR0, &TA0CCR1, &TA0CCR2};
+const uint16_t gMinTimerVal = 128;
+const uint16_t gMaxTimerVal = 65408;
+
+
+volatile uint8_t gSysFlags;
+volatile int8_t channel_incr[NUM_CHANNELS] = {8, 8, 8};
 
 
 int main(void) {
@@ -37,11 +43,15 @@ int main(void) {
     BCSCTL1 = CALBC1_16MHZ;
     DCOCTL = CALDCO_16MHZ;			// Set clock to 16MHz
 	
-    TA0CCR0;
+    configWDT();					// Configure the watchdog timer.
+    configTimerA();					// Configure TimerA0.
 
     while (1)						// Main Loop
     {
-
+    	if (gSysFlags & SYSFLG_UPDATE_PWM)
+    	{
+    		updatePwm();
+    	}
 
     	__bis_SR_register(LPM0_bits | GIE);
     }
@@ -82,22 +92,31 @@ static inline void configTimerA(void)
 }
 
 
+/*
+ * Update the Timer0 CCRs to shift the PWM point.
+ */
+static inline void updatePwm(volatile uint16_t * reg, uint16_t targetVal)
+{
+
+}
+
+static inline void updatePwm0(void)
+{
+	static incr = 8;
+
+
+}
+
 
 /* Interrupt Routines */
 #pragma vector=WDT_VECTOR
 __interrupt void WDT_ISR(void)
 {
-	uint16_t i;
+	uint8_t wake;
 
-	for (i=0; i<NUM_CHANNELS; i++)
-	{
-		if (*ta0_pwm_regs[i] == 0xffff)
-			channel_incr[i] = -1;
-		else if (*ta0_pwm_regs[i] == 0)
-			channel_incr[i] = 1;
 
-		*ta0_pwm_regs[i] += channel_incr[i];
-	}
+	if (wake)
+		__bic_SR_register_on_exit(LPM0_bits);
 }
 
 #pragma vector=TIMER0_A1_VECTOR
