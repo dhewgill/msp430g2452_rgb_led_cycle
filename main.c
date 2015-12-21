@@ -21,7 +21,7 @@
 /* Function Prototypes */
 static inline void configTimerA(void);
 static inline void configWDT(void);
-static inline void updatePwm(volatile uint16_t * reg, int8_t * incr);
+static inline void updatePwm(volatile uint16_t * ta0_ccr_reg, int8_t * incr);
 
 
 /* Type Definitions */
@@ -98,11 +98,11 @@ static inline void configTimerA(void)
 /*
  * Update the Timer0 CCRs to shift the PWM point.
  */
-static inline void updatePwm(volatile uint16_t * reg, int8_t * incr)
+static inline void updatePwm(volatile uint16_t * ta0_ccr_reg, int8_t * incr)
 {
 	register uint16_t tmp;
 
-	tmp = *reg;
+	tmp = *ta0_ccr_reg;
 	tmp += *incr;
 	if (tmp < gMinTimerVal)
 	{
@@ -115,7 +115,7 @@ static inline void updatePwm(volatile uint16_t * reg, int8_t * incr)
 		*incr *= -1;
 	}
 
-	*reg = tmp;
+	*ta0_ccr_reg = tmp;
 }
 
 
