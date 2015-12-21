@@ -21,7 +21,7 @@
 /* Function Prototypes */
 static inline void configTimerA(void);
 static inline void configWDT(void);
-static inline void updatePwm(void);
+static inline void updatePwm(volatile uint16_t * reg, int8_t * incr);
 
 
 /* Type Definitions */
@@ -50,7 +50,10 @@ int main(void) {
     {
     	if (gSysFlags & SYSFLG_UPDATE_PWM)
     	{
-    		updatePwm();
+    		updatePwm(&TA0CCR0, channel_incr[0]);
+    		updatePwm(&TA0CCR1, channel_incr[1]);
+    		updatePwm(&TA0CCR2, channel_incr[2]);
+    		gSysFlags &= ~SYSFLG_UPDATE_PWM;
     	}
 
     	__bis_SR_register(LPM0_bits | GIE);
@@ -95,16 +98,24 @@ static inline void configTimerA(void)
 /*
  * Update the Timer0 CCRs to shift the PWM point.
  */
-static inline void updatePwm(volatile uint16_t * reg, uint16_t targetVal)
+static inline void updatePwm(volatile uint16_t * reg, int8_t * incr)
 {
+	register uint16_t tmp;
 
-}
+	tmp = *reg;
+	tmp += *incr;
+	if (tmp < gMinTimerVal)
+	{
+		tmp = gMinTimerVal;
+		*incr *= -1;
+	}
+	else if (tmp > gMaxTimerVal)
+	{
+		tmp = gMaxTimerVal;
+		*incr *= -1;
+	}
 
-static inline void updatePwm0(void)
-{
-	static incr = 8;
-
-
+	*reg = tmp;
 }
 
 
