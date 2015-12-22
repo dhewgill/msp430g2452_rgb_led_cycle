@@ -44,6 +44,7 @@ int main(void) {
     DCOCTL = CALDCO_16MHZ;			// Set clock to 16MHz
 	
     configWDT();					// Configure the watchdog timer.
+    __delay_cycles(16384);			// Force an offset between TA0 and WDT rollovers as they are both synchronous to MCLK.
     configTimerA();					// Configure TimerA0.
 
     while (1)						// Main Loop
@@ -104,12 +105,12 @@ static inline void updatePwm(volatile uint16_t * ta0_ccr_reg, int8_t * incr)
 
 	tmp = *ta0_ccr_reg;
 	tmp += *incr;
-	if (tmp < G_MIN_TIMER_VAL)
+	if (tmp <= G_MIN_TIMER_VAL)
 	{
 		tmp = G_MIN_TIMER_VAL;
 		*incr *= -1;
 	}
-	else if (tmp > G_MAX_TIMER_VAL)
+	else if (tmp >= G_MAX_TIMER_VAL)
 	{
 		tmp = G_MAX_TIMER_VAL;
 		*incr *= -1;
@@ -123,11 +124,13 @@ static inline void updatePwm(volatile uint16_t * ta0_ccr_reg, int8_t * incr)
 #pragma vector=WDT_VECTOR
 __interrupt void WDT_ISR(void)
 {
-	uint8_t wake;
+	static uint8_t wake;
 
-
-	if (wake)
+	if (++wake & 0x04)							// Wake up every 4 counts; ~8.192ms.  Allows ~2 pwm cycles.
+	{
+		g_sys_flags |= SYSFLG_UPDATE_PWM;
 		__bic_SR_register_on_exit(LPM0_bits);
+	}
 }
 
 #pragma vector=TIMER0_A1_VECTOR
