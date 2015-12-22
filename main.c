@@ -19,6 +19,7 @@
 #define SYSFLG_UPDATE_PWM	0x80
 
 /* Function Prototypes */
+static inline void configPort1(void);
 static inline void configTimerA(void);
 static inline void configWDT(void);
 static inline void updatePwm(volatile uint16_t * ta0_ccr_reg, int8_t * incr);
@@ -43,8 +44,9 @@ int main(void) {
     BCSCTL1 = CALBC1_16MHZ;
     DCOCTL = CALDCO_16MHZ;			// Set clock to 16MHz
 	
+    configPort1();					// Configure Port1.
     configWDT();					// Configure the watchdog timer.
-    __delay_cycles(16384);			// Force an offset between TA0 and WDT rollovers as they are both synchronous to MCLK.
+    __delay_cycles(16384);			// Force an offset between TA0 and WDT rollovers as they are both sourced from SMCLK.
     configTimerA();					// Configure TimerA0.
 
     while (1)						// Main Loop
@@ -62,6 +64,20 @@ int main(void) {
 
 
     return 0;
+}
+
+
+/*
+ * Configure Port 1:
+ * - P1.1: TA0.0 output.  [LED1]
+ * - P1.4: TA0.2 output.
+ * - P1.6: TA0.1 output.  [LED2]
+ */
+static inline void configPort1(void)
+{
+	P1DIR = BIT6 | BIT4 | BIT1;	// P1.6, P1.4, P1.1 output.
+	P1SEL = BIT6 | BIT4 | BIT1; // P1.6, P1.1 TA0.0, TA0.1, TA0.2(part 1) select.
+	P1SEL2 = BIT4;				// P1.4 TA0.2(part 2) select.
 }
 
 /*
