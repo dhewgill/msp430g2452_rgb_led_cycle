@@ -37,7 +37,8 @@ volatile uint8_t g_sys_flags;
 int8_t g_channel_incr[NUM_CHANNELS] = {8, 8, 8};
 
 
-int main(void) {
+int main(void)
+{
     WDTCTL = WDTPW | WDTHOLD;		// Stop watchdog timer
 
     DCOCTL = 0;
@@ -53,15 +54,14 @@ int main(void) {
     {
     	if (g_sys_flags & SYSFLG_UPDATE_PWM)
     	{
-    		updatePwm(&TA0CCR0, g_channel_incr[0]);
-    		updatePwm(&TA0CCR1, g_channel_incr[1]);
-    		updatePwm(&TA0CCR2, g_channel_incr[2]);
+    		updatePwm(&TA0CCR0, &g_channel_incr[0]);
+    		updatePwm(&TA0CCR1, &g_channel_incr[1]);
+    		updatePwm(&TA0CCR2, &g_channel_incr[2]);
     		g_sys_flags &= ~SYSFLG_UPDATE_PWM;
     	}
 
     	__bis_SR_register(LPM0_bits | GIE);
     }
-
 
     return 0;
 }
@@ -85,12 +85,15 @@ static inline void configPort1(void)
  * - Interval Mode
  * - SMCLK source
  * - /8192 [yields ~2ms interval at SMCLK = 16MHz]
+ * - WDT start
+ * Enable the WDT interrupt.
  * Start the timer.
  */
 static inline void configWDT(void)
 {
+	IFG1 &= ~WDTIFG;
 	WDTCTL = WDTPW | WDTTMSEL | WDTCNTCL | WDTIS0;
-	WDTCTL = (WDTPW | WDTCTL) & ~WDTHOLD;
+	IE1 = WDTIE;
 }
 
 /*
