@@ -30,13 +30,23 @@ static inline void updateTargetVals(void);
 
 
 /* Type Definitions */
-
+typedef union
+{
+	struct
+	{
+		uint8_t update_pwm		: 1;
+		uint8_t adc_done		: 1;
+		uint8_t unused			: 6;
+	};
+	uint8_t flags;
+} sysFlags_t;
 
 /* Global Variables */
 const uint16_t G_MIN_TIMER_VAL = 128;
 const uint16_t G_MAX_TIMER_VAL = 65408;
 
-volatile uint8_t g_sys_flags;
+//volatile uint8_t g_sys_flags;
+volatile sysFlags_t g_sys_flags;
 int8_t g_channel_incr[NUM_CHANNELS] = {8, 8, 8};
 uint16_t g_channel_target_vals[NUM_CHANNELS] = {G_MIN_TIMER_VAL, G_MIN_TIMER_VAL, G_MIN_TIMER_VAL};
 uint16_t g_raw_adc10_vals[NUM_CHANNELS] = {0, 0, 0};
@@ -56,21 +66,21 @@ int main(void)
 
     while (1)						// Main Loop
     {
-    	if (g_sys_flags & SYSFLG_UPDATE_PWM)
+    	if (g_sys_flags.update_pwm)
     	{
     		updatePwm(&TA0CCR0, &g_channel_incr[0]);
     		updatePwm(&TA0CCR1, &g_channel_incr[1]);
     		updatePwm(&TA0CCR2, &g_channel_incr[2]);
-    		g_sys_flags &= ~SYSFLG_UPDATE_PWM;
+    		g_sys_flags.update_pwm = 0;
     	}
 
-    	if (g_sys_flags & SYSFLG_ADC_DONE)
+    	if (g_sys_flags.adc_done)
     	{
     		updateTargetVals();
-    		g_sys_flags &= ~SYSFLG_ADC_DONE;
+    		g_sys_flags.adc_done = 0;
     	}
 
-    	if (g_sys_flags == 0)
+    	if (g_sys_flags.flags == 0)
     		__bis_SR_register(LPM0_bits | GIE);
     }
 
@@ -95,7 +105,7 @@ static inline void configPort1(void)
  * Set the WDT in:
  * - Interval Mode
  * - SMCLK source
- * - /8192 [yields ~2ms interval at SMCLK = 16MHz]
+ * - /32768 [yields ~2ms interval at SMCLK = 16MHz]
  * - WDT start
  * Enable the WDT interrupt.
  * Start the timer.
@@ -103,7 +113,7 @@ static inline void configPort1(void)
 static inline void configWDT(void)
 {
 	IFG1 &= ~WDTIFG;
-	WDTCTL = WDTPW | WDTTMSEL | WDTCNTCL | WDTIS0;
+	WDTCTL = WDTPW | WDTTMSEL | WDTCNTCL;
 	IE1 = WDTIE;
 }
 
@@ -137,14 +147,14 @@ static inline void configTimerA(void)
  * - ADC10 on
  * - ADC10 interrupt enable
  */
-static inline void configAdc10(void)
+/*static inline void configAdc10(void)
 {
 	ADC10DTC0 = 0;
 	ADC10DTC1 = NUM_CHANNELS;
 	ADC10CTL1 = INCH_10 | ADC10DIV_7 | ADC10SSEL_3 | CONSEQ_2;
 	ADC10CTL0 = SREF_1 | ADC10SHT_3 | MSC | REFON | ADC10ON | ADC10IE | ENC | ADC10SC;
 	ADC10SA = &g_raw_adc10_vals[0];
-}
+}*/
 
 
 /*
@@ -201,7 +211,7 @@ __interrupt void WDT_ISR(void)
 
 	if (++wake & 0x04)							// Wake up every 4 counts; ~8.192ms.  Allows ~2 pwm cycles.
 	{
-		g_sys_flags |= SYSFLG_UPDATE_PWM;
+		g_sys_flags.update_pwm = 1;
 		__bic_SR_register_on_exit(LPM0_bits);
 	}
 }
@@ -229,6 +239,6 @@ __interrupt void TIMER0_A1_ISR(void)
 #pragma vector=ADC10_VECTOR
 __interrupt void ADC10_ISR (void)
 {
-	g_sys_flags |= SYSFLG_ADC_DONE;
+	g_sys_flags.adc_done = 1;
 	__bic_SR_register_on_exit(LPM0_bits);
 }
