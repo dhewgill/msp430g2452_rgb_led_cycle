@@ -25,7 +25,7 @@ static inline void configPort1(void);
 static inline void configTimerA(void);
 static inline void configWDT(void);
 static inline void configAdc10(void);
-static inline void updatePwm(volatile uint16_t * ta0_ccr_reg, int8_t * incr);
+static inline void updatePwm_mode1(volatile uint16_t * ta0_ccr_reg, int8_t * incr);
 static inline void updatePwm_mode0(	volatile uint16_t * ta0_ccr_reg,
 									int8_t * incr,
 									uint16_t * next_target_pwm,
@@ -52,8 +52,8 @@ typedef union
 const uint16_t G_MIN_TIMER_VAL = 128;
 const uint16_t G_MAX_TIMER_VAL = 65408;
 
-//volatile uint8_t g_sys_flags;
 volatile sysFlags_t g_sys_flags;
+volatile uint8_t g_operating_mode;
 int8_t g_channel_incr[NUM_CHANNELS] = {8, 8, 8};
 uint16_t g_channel_target_vals[NUM_CHANNELS] = {G_MIN_TIMER_VAL, G_MIN_TIMER_VAL, G_MIN_TIMER_VAL};
 uint16_t g_raw_adc10_vals[NUM_CHANNELS] = {0, 0, 0};
@@ -72,16 +72,23 @@ int main(void)
     configTimerA();					// Configure TimerA0.
     configAdc10();
 
+    g_operating_mode = 0;
     while (1)						// Main Loop
     {
     	if (g_sys_flags.update_pwm)
     	{
-    		//updatePwm(&TA0CCR0, &g_channel_incr[0]);
-    		//updatePwm(&TA0CCR1, &g_channel_incr[1]);
-    		//updatePwm(&TA0CCR2, &g_channel_incr[2]);
-    		updatePwm0();
-    		updatePwm1();
-    		updatePwm2();
+    		if (g_operating_mode == 1)
+    		{
+				updatePwm_mode1(&TA0CCR0, &g_channel_incr[0]);
+				updatePwm_mode1(&TA0CCR1, &g_channel_incr[1]);
+				updatePwm_mode1(&TA0CCR2, &g_channel_incr[2]);
+    		}
+    		else
+    		{
+				updatePwm0();
+				updatePwm1();
+				updatePwm2();
+    		}
     		g_sys_flags.update_pwm = 0;
     	}
 
@@ -171,7 +178,7 @@ static inline void configAdc10(void)
 /*
  * Update the Timer0 CCRs to shift the PWM point.
  */
-static inline void updatePwm(volatile uint16_t * ta0_ccr_reg, int8_t * incr)
+static inline void updatePwm_mode1(volatile uint16_t * ta0_ccr_reg, int8_t * incr)
 {
 	register uint16_t tmp;
 
@@ -257,8 +264,6 @@ static inline void updatePwm2(void)
  * Function used to update the PWM target values.
  * It is run when the ADC10 has finished a block
  * of conversions.
- * Once the next targets are ready, then shut off
- * the ADC10.
  */
 static inline void updateTargetVals(void)
 {
@@ -281,7 +286,7 @@ __interrupt void WDT_ISR(void)
 {
 	static uint8_t wake;
 
-	if (++wake & 0x04)							// Wake up every 4 counts; ~8.192ms.  Allows ~2 pwm cycles.
+	if (++wake & 0x03)
 	{
 		g_sys_flags.update_pwm = 1;
 		__bic_SR_register_on_exit(LPM0_bits);
