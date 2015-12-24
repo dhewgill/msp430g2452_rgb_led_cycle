@@ -43,17 +43,30 @@ typedef union
 	{
 		uint8_t update_pwm		: 1;
 		uint8_t adc_done		: 1;
-		uint8_t unused			: 6;
+		uint8_t button_press	: 1;
+		uint8_t unused			: 5;
 	};
 	uint8_t flags;
 } sysFlags_t;
+
+typedef union
+{
+	struct
+	{
+		uint8_t operating_mode	:2;
+		uint8_t button_down		:1;
+		uint8_t unused			:5;
+	};
+	uint8_t states;
+} sysStates_t;
+
 
 /* Global Variables */
 const uint16_t G_MIN_TIMER_VAL = 128;
 const uint16_t G_MAX_TIMER_VAL = 65408;
 
 volatile sysFlags_t g_sys_flags;
-volatile uint8_t g_operating_mode;
+volatile sysStates_t g_sys_status;
 int8_t g_channel_incr[NUM_CHANNELS] = {8, 8, 8};
 uint16_t g_channel_target_vals[NUM_CHANNELS] = {G_MIN_TIMER_VAL, G_MIN_TIMER_VAL, G_MIN_TIMER_VAL};
 uint16_t g_raw_adc10_vals[NUM_CHANNELS] = {0, 0, 0};
@@ -72,12 +85,12 @@ int main(void)
     configTimerA();					// Configure TimerA0.
     configAdc10();
 
-    g_operating_mode = 0;
+   g_sys_status.operating_mode = 0;
     while (1)						// Main Loop
     {
     	if (g_sys_flags.update_pwm)
     	{
-    		if (g_operating_mode == 1)
+    		if (g_sys_status.operating_mode == 1)
     		{
 				updatePwm_mode1(&TA0CCR0, &g_channel_incr[0]);
 				updatePwm_mode1(&TA0CCR1, &g_channel_incr[1]);
