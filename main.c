@@ -54,8 +54,9 @@ typedef union
 	struct
 	{
 		uint8_t operating_mode	:2;
+		uint8_t pwm_tick_count	:2;
 		uint8_t button_down		:1;
-		uint8_t unused			:5;
+		uint8_t unused			:3;
 	};
 	uint8_t states;
 } sysStates_t;
@@ -297,13 +298,17 @@ static inline void updateTargetVals(void)
 #pragma vector=WDT_VECTOR
 __interrupt void WDT_ISR(void)
 {
-	static uint8_t wake;
+	static uint16_t input_state = 0x0000;
+	register uint8_t wake;
 
-	if (++wake & 0x03)
+	if (++g_sys_status.pwm_tick_count == 3)
 	{
 		g_sys_flags.update_pwm = 1;
-		__bic_SR_register_on_exit(LPM0_bits);
+		wake = 1;
 	}
+
+	if (wake)
+		__bic_SR_register_on_exit(LPM0_bits);
 }
 
 // Timer0_A1 interrupt service routine - handles TA0 overflow.
