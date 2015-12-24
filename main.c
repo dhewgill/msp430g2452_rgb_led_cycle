@@ -26,6 +26,13 @@ static inline void configTimerA(void);
 static inline void configWDT(void);
 static inline void configAdc10(void);
 static inline void updatePwm(volatile uint16_t * ta0_ccr_reg, int8_t * incr);
+static inline void updatePwm_mode0(	volatile uint16_t * ta0_ccr_reg,
+									int8_t * incr,
+									uint16_t * next_target_pwm,
+									uint16_t * target_data_src);
+static inline void updatePwm0(void);
+static inline void updatePwm1(void);
+static inline void updatePwm2(void);
 static inline void updateTargetVals(void);
 
 
@@ -63,14 +70,18 @@ int main(void)
     configWDT();					// Configure the watchdog timer.
     __delay_cycles(16384);			// Force an offset between TA0 and WDT rollovers as they are both sourced from SMCLK.
     configTimerA();					// Configure TimerA0.
+    configAdc10();
 
     while (1)						// Main Loop
     {
     	if (g_sys_flags.update_pwm)
     	{
-    		updatePwm(&TA0CCR0, &g_channel_incr[0]);
-    		updatePwm(&TA0CCR1, &g_channel_incr[1]);
-    		updatePwm(&TA0CCR2, &g_channel_incr[2]);
+    		//updatePwm(&TA0CCR0, &g_channel_incr[0]);
+    		//updatePwm(&TA0CCR1, &g_channel_incr[1]);
+    		//updatePwm(&TA0CCR2, &g_channel_incr[2]);
+    		updatePwm0();
+    		updatePwm1();
+    		updatePwm2();
     		g_sys_flags.update_pwm = 0;
     	}
 
@@ -147,14 +158,14 @@ static inline void configTimerA(void)
  * - ADC10 on
  * - ADC10 interrupt enable
  */
-/*static inline void configAdc10(void)
+static inline void configAdc10(void)
 {
 	ADC10DTC0 = 0;
 	ADC10DTC1 = NUM_CHANNELS;
 	ADC10CTL1 = INCH_10 | ADC10DIV_7 | ADC10SSEL_3 | CONSEQ_2;
 	ADC10CTL0 = SREF_1 | ADC10SHT_3 | MSC | REFON | ADC10ON | ADC10IE | ENC | ADC10SC;
 	ADC10SA = &g_raw_adc10_vals[0];
-}*/
+}
 
 
 /*
@@ -178,6 +189,67 @@ static inline void updatePwm(volatile uint16_t * ta0_ccr_reg, int8_t * incr)
 	}
 
 	*ta0_ccr_reg = tmp;
+}
+
+
+static inline void updatePwm_mode0(	volatile uint16_t * ta0_ccr_reg,
+									int8_t * incr,
+									uint16_t * next_target_pwm,
+									uint16_t * target_data_src)
+{
+	register uint16_t tmp_ccr;
+
+	tmp_ccr = *ta0_ccr_reg;
+	tmp_ccr += *incr;
+
+	if ( (tmp_ccr >= *next_target_pwm) && (*incr > 0) ||
+		 (tmp_ccr <= *next_target_pwm) && (*incr < 0) )			// Time to change PWM target.
+	{
+		tmp_ccr = *next_target_pwm;
+		*next_target_pwm = *target_data_src;
+
+		// Guard against going beyond the timer bounds:
+		if (*next_target_pwm >= G_MAX_TIMER_VAL)
+			*next_target_pwm = G_MAX_TIMER_VAL;
+
+		else if (*next_target_pwm <= G_MIN_TIMER_VAL)
+			*next_target_pwm = G_MIN_TIMER_VAL;
+
+		// Set the incrementer direction.
+		if (*next_target_pwm < tmp_ccr)
+			*incr = -8;
+		else if (*next_target_pwm > tmp_ccr)
+			*incr = 8;
+	}
+
+	if (tmp_ccr >= G_MAX_TIMER_VAL)
+		tmp_ccr = G_MAX_TIMER_VAL;
+
+	else if (tmp_ccr <= G_MIN_TIMER_VAL)
+		tmp_ccr = G_MIN_TIMER_VAL;
+
+	*ta0_ccr_reg = tmp_ccr;
+}
+
+static inline void updatePwm0(void)
+{
+	static uint16_t next_target_pwm = G_MIN_TIMER_VAL;
+
+	updatePwm_mode0(&TA0CCR0, &g_channel_incr[0], &next_target_pwm, &g_channel_target_vals[0]);
+}
+
+static inline void updatePwm1(void)
+{
+	static uint16_t next_target_pwm = G_MIN_TIMER_VAL;
+
+	updatePwm_mode0(&TA0CCR1, &g_channel_incr[1], &next_target_pwm, &g_channel_target_vals[1]);
+}
+
+static inline void updatePwm2(void)
+{
+	static uint16_t next_target_pwm = G_MIN_TIMER_VAL;
+
+	updatePwm_mode0(&TA0CCR2, &g_channel_incr[2], &next_target_pwm, &g_channel_target_vals[2]);
 }
 
 
