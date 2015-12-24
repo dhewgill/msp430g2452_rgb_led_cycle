@@ -87,7 +87,7 @@ int main(void)
     configTimerA();					// Configure TimerA0.
     configAdc10();
 
-   g_sys_status.operating_mode = 0;
+   //g_sys_status.operating_mode = 0;
     while (1)						// Main Loop
     {
     	if (g_sys_flags.update_pwm)
@@ -115,6 +115,7 @@ int main(void)
 
     	if (g_sys_flags.button_press)
     	{
+    		handleButtonPress();
     		g_sys_flags.button_press = 0;
     	}
 
@@ -310,7 +311,10 @@ static inline void handleButtonPress(void)
 	{
 		register int i;
 		for (i=0; i<NUM_CHANNELS; i++)
+		{
 			g_channel_target_vals[i] = G_MAX_TIMER_VAL;
+			g_channel_incr[i] = 8;
+		}
 	}
 }
 
@@ -320,7 +324,7 @@ static inline void handleButtonPress(void)
 __interrupt void WDT_ISR(void)
 {
 	const uint16_t but_down_patt = 0x8000;
-	const uint16_t but_up_patt - 0x7fff;
+	const uint16_t but_up_patt = 0x7fff;
 	static uint16_t button_history = 0x0000;
 	register uint8_t wake;
 
