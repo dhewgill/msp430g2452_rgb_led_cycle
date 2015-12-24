@@ -85,9 +85,12 @@ int main(void)
     configWDT();					// Configure the watchdog timer.
     __delay_cycles(16384);			// Force an offset between TA0 and WDT rollovers as they are both sourced from SMCLK.
     configTimerA();					// Configure TimerA0.
+    __delay_cycles(2048);
     configAdc10();
 
    //g_sys_status.operating_mode = 0;
+    g_sys_status.button_state = 1;	// It's pulled up.
+
     while (1)						// Main Loop
     {
     	if (g_sys_flags.update_pwm)
@@ -137,8 +140,8 @@ int main(void)
 static inline void configPort1(void)
 {
 	P1DIR = BIT6 | BIT4 | BIT1;	// P1.6, P1.4, P1.1 output.
-	P1REN = BIT3;				// Enable resistor on P1.3.
 	P1OUT = BIT3;				// Pullup resistor on P1.3.
+	P1REN = BIT3;				// Enable resistor on P1.3.
 	P1SEL = BIT6 | BIT4 | BIT1; // P1.6, P1.1 TA0.0, TA0.1, TA0.2(part 1) select.
 	P1SEL2 = BIT4;				// P1.4 TA0.2(part 2) select.
 }
@@ -309,12 +312,12 @@ static inline void handleButtonPress(void)
 	g_sys_status.operating_mode++;
 	if (g_sys_status.operating_mode == 1)
 	{
-		register int i;
-		for (i=0; i<NUM_CHANNELS; i++)
-		{
-			g_channel_target_vals[i] = G_MAX_TIMER_VAL;
-			g_channel_incr[i] = 8;
-		}
+		g_channel_incr[0] = 8;
+		g_channel_incr[1] = 8;
+		g_channel_incr[2] = 8;
+		TA0CCR0 = G_MAX_TIMER_VAL;
+		TA0CCR1 = G_MAX_TIMER_VAL;
+		TA0CCR2 = G_MAX_TIMER_VAL;
 	}
 }
 
@@ -325,25 +328,26 @@ __interrupt void WDT_ISR(void)
 {
 	const uint16_t but_down_patt = 0x8000;
 	const uint16_t but_up_patt = 0x7fff;
-	static uint16_t button_history = 0x0000;
+	static uint16_t button_history = 0xffff;
 	register uint8_t wake;
 
 	// Check if it's time to wake up to update the PWM.
-	if (++g_sys_status.pwm_tick_count == 3)
+	if (++g_sys_status.pwm_tick_count & 3)
 	{
 		g_sys_flags.update_pwm = 1;
 		wake = 1;
 	}
 
 	// Update the button history and check the button state.
-	button_history <<= ((P1IN & BIT3) ? 1 : 0);
+	button_history <<= 1;
+	button_history |= ((P1IN & BIT3) ? 1 : 0);
 	if ( (button_history == but_down_patt) && g_sys_status.button_state )
 	{
 		g_sys_status.button_state = 0;
 		g_sys_flags.button_press = 1;
 		wake = 1;
 	}
-	else if ( (button_history == but_up_patt) && (g_sys_status.button_state > 0) )
+	else if ( (button_history == but_up_patt) && (g_sys_status.button_state == 0) )
 		g_sys_status.button_state = 1;
 
 	if (wake)
