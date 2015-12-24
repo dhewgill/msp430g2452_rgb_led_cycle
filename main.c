@@ -34,6 +34,7 @@ static inline void updatePwm0(void);
 static inline void updatePwm1(void);
 static inline void updatePwm2(void);
 static inline void updateTargetVals(void);
+static inline void handleButtonPress(void);
 
 
 /* Type Definitions */
@@ -55,7 +56,7 @@ typedef union
 	{
 		uint8_t operating_mode	:2;
 		uint8_t pwm_tick_count	:2;
-		uint8_t button_down		:1;
+		uint8_t button_state	:1;
 		uint8_t unused			:3;
 	};
 	uint8_t states;
@@ -112,6 +113,11 @@ int main(void)
     		g_sys_flags.adc_done = 0;
     	}
 
+    	if (g_sys_flags.button_press)
+    	{
+    		g_sys_flags.button_press = 0;
+    	}
+
     	if (g_sys_flags.flags == 0)
     		__bis_SR_register(LPM0_bits | GIE);
     }
@@ -125,10 +131,13 @@ int main(void)
  * - P1.1: TA0.0 output.  [LED1]
  * - P1.4: TA0.2 output.
  * - P1.6: TA0.1 output.  [LED2]
+ * - P1.3: input.		  [button]
  */
 static inline void configPort1(void)
 {
 	P1DIR = BIT6 | BIT4 | BIT1;	// P1.6, P1.4, P1.1 output.
+	P1REN = BIT3;				// Enable resistor on P1.3.
+	P1OUT = BIT3;				// Pullup resistor on P1.3.
 	P1SEL = BIT6 | BIT4 | BIT1; // P1.6, P1.1 TA0.0, TA0.1, TA0.2(part 1) select.
 	P1SEL2 = BIT4;				// P1.4 TA0.2(part 2) select.
 }
@@ -293,19 +302,45 @@ static inline void updateTargetVals(void)
 }
 
 
+static inline void handleButtonPress(void)
+{
+	// Update the operating mode:
+	g_sys_status.operating_mode++;
+	if (g_sys_status.operating_mode == 1)
+	{
+		register int i;
+		for (i=0; i<NUM_CHANNELS; i++)
+			g_channel_target_vals[i] = G_MAX_TIMER_VAL;
+	}
+}
+
 /* Interrupt Routines */
 // Watchdog interrupt service routine - handles WDT overflow [interval mode].
 #pragma vector=WDT_VECTOR
 __interrupt void WDT_ISR(void)
 {
-	static uint16_t input_state = 0x0000;
+	const uint16_t but_down_patt = 0x8000;
+	const uint16_t but_up_patt - 0x7fff;
+	static uint16_t button_history = 0x0000;
 	register uint8_t wake;
 
+	// Check if it's time to wake up to update the PWM.
 	if (++g_sys_status.pwm_tick_count == 3)
 	{
 		g_sys_flags.update_pwm = 1;
 		wake = 1;
 	}
+
+	// Update the button history and check the button state.
+	button_history <<= ((P1IN & BIT3) ? 1 : 0);
+	if ( (button_history == but_down_patt) && g_sys_status.button_state )
+	{
+		g_sys_status.button_state = 0;
+		g_sys_flags.button_press = 1;
+		wake = 1;
+	}
+	else if ( (button_history == but_up_patt) && (g_sys_status.button_state > 0) )
+		g_sys_status.button_state = 1;
 
 	if (wake)
 		__bic_SR_register_on_exit(LPM0_bits);
