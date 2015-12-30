@@ -12,27 +12,26 @@
  */
 
 /* Preprocessor Defines */
-#define NUM_CHANNELS 3
-#define F_MCLK		16000000ul
-#define F_SMCLK		16000000ul
+#define NUM_CHANNELS	3
+#define F_MCLK			16000000ul
+#define F_SMCLK			16000000ul
 
-#define SYSFLG_UPDATE_PWM		0x80
-#define SYSFLG_ADC_DONE			0x40
-
+#define MIN_TIMER_VAL	((uint16_t) 128)
+#define MAX_TIMER_VAL	((uint16_t) 65408)
+#define PWM_INCR		((int8_t) 16)
 
 /* Function Prototypes */
 static inline void configPort1(void);
 static inline void configTimerA(void);
 static inline void configWDT(void);
 static inline void configAdc10(void);
-static inline void updatePwm_mode1(volatile uint16_t * ta0_ccr_reg, int8_t * incr);
-static inline void updatePwm_mode0(	volatile uint16_t * ta0_ccr_reg,
+void initTimerVals(void);
+static inline void updatePwm_mode2(volatile uint16_t * ta0_ccr_reg, int8_t * incr);
+static inline void updatePwm_mode1(	volatile uint16_t * ta0_ccr_reg,
 									int8_t * incr,
 									uint16_t * next_target_pwm,
 									uint16_t * target_data_src);
-static inline void updatePwm0(void);
-static inline void updatePwm1(void);
-static inline void updatePwm2(void);
+static inline void handlePwmUpdate(void);
 static inline void updateTargetVals(void);
 static inline void handleButtonPress(void);
 
@@ -54,8 +53,8 @@ typedef union
 {
 	struct
 	{
-		uint8_t operating_mode	:2;
 		uint8_t pwm_tick_count	:2;
+		uint8_t operating_mode	:2;
 		uint8_t button_state	:1;
 		uint8_t unused			:3;
 	};
@@ -64,14 +63,13 @@ typedef union
 
 
 /* Global Variables */
-const uint16_t G_MIN_TIMER_VAL = 128;
-const uint16_t G_MAX_TIMER_VAL = 65408;
-
 volatile sysFlags_t g_sys_flags;
 volatile sysStates_t g_sys_status;
-int8_t g_channel_incr[NUM_CHANNELS] = {8, 8, 8};
-uint16_t g_channel_target_vals[NUM_CHANNELS] = {G_MIN_TIMER_VAL, G_MIN_TIMER_VAL, G_MIN_TIMER_VAL};
+int8_t g_channel_incr[NUM_CHANNELS] = {PWM_INCR, PWM_INCR, PWM_INCR};
+uint16_t g_channel_target_vals[NUM_CHANNELS] = {MIN_TIMER_VAL, MIN_TIMER_VAL, MIN_TIMER_VAL};
+uint16_t g_channel_next_pwm_target[NUM_CHANNELS] = {MIN_TIMER_VAL, MIN_TIMER_VAL, MIN_TIMER_VAL};
 uint16_t g_raw_adc10_vals[NUM_CHANNELS] = {0, 0, 0};
+
 
 int main(void)
 {
@@ -82,31 +80,22 @@ int main(void)
     DCOCTL = CALDCO_16MHZ;			// Set clock to 16MHz
 	
     configPort1();					// Configure Port1.
+    configAdc10();
     configWDT();					// Configure the watchdog timer.
     __delay_cycles(16384);			// Force an offset between TA0 and WDT rollovers as they are both sourced from SMCLK.
     configTimerA();					// Configure TimerA0.
-    __delay_cycles(2048);
-    configAdc10();
 
-   //g_sys_status.operating_mode = 0;
+    g_sys_status.operating_mode = 1;// 'Random' mode.
     g_sys_status.button_state = 1;	// It's pulled up.
 
+    initTimerVals();
+    __enable_interrupt();
     while (1)						// Main Loop
     {
     	if (g_sys_flags.update_pwm)
     	{
-    		if (g_sys_status.operating_mode == 1)
-    		{
-				updatePwm_mode1(&TA0CCR0, &g_channel_incr[0]);
-				updatePwm_mode1(&TA0CCR1, &g_channel_incr[1]);
-				updatePwm_mode1(&TA0CCR2, &g_channel_incr[2]);
-    		}
-    		else
-    		{
-				updatePwm0();
-				updatePwm1();
-				updatePwm2();
-    		}
+    		if (g_sys_status.operating_mode)
+    			handlePwmUpdate();
     		g_sys_flags.update_pwm = 0;
     	}
 
@@ -198,35 +187,48 @@ static inline void configAdc10(void)
 	ADC10DTC1 = NUM_CHANNELS;
 	ADC10CTL1 = INCH_10 | ADC10DIV_7 | ADC10SSEL_3 | CONSEQ_2;
 	ADC10CTL0 = SREF_1 | ADC10SHT_3 | MSC | REFON | ADC10ON | ADC10IE | ENC | ADC10SC;
-	ADC10SA = &g_raw_adc10_vals[0];
+	ADC10SA = (unsigned int)g_raw_adc10_vals;
+}
+
+
+void initTimerVals(void)
+{
+	g_channel_incr[0] = PWM_INCR;
+	g_channel_incr[1] = PWM_INCR;
+	g_channel_incr[2] = PWM_INCR;
+	TA0CCR0 = MIN_TIMER_VAL;
+	TA0CCR1 = MIN_TIMER_VAL;
+	TA0CCR2 = MIN_TIMER_VAL;
 }
 
 
 /*
  * Update the Timer0 CCRs to shift the PWM point.
  */
-static inline void updatePwm_mode1(volatile uint16_t * ta0_ccr_reg, int8_t * incr)
+static inline void updatePwm_mode2(volatile uint16_t * ta0_ccr_reg, int8_t * incr)
 {
-	register uint16_t tmp;
+	register uint16_t tmp_ccr;
 
-	tmp = *ta0_ccr_reg;
-	tmp += *incr;
-	if (tmp <= G_MIN_TIMER_VAL)
+	tmp_ccr = *ta0_ccr_reg;
+	tmp_ccr += *incr;
+	if (tmp_ccr <= MIN_TIMER_VAL)
 	{
-		tmp = G_MIN_TIMER_VAL;
-		*incr *= -1;
+		tmp_ccr = MIN_TIMER_VAL;
+		//*incr *= -1;
+		*incr = PWM_INCR;
 	}
-	else if (tmp >= G_MAX_TIMER_VAL)
+	else if (tmp_ccr >= MAX_TIMER_VAL)
 	{
-		tmp = G_MAX_TIMER_VAL;
-		*incr *= -1;
+		tmp_ccr = MAX_TIMER_VAL;
+		//*incr *= -1;
+		*incr = -PWM_INCR;
 	}
 
-	*ta0_ccr_reg = tmp;
+	*ta0_ccr_reg = tmp_ccr;
 }
 
 
-static inline void updatePwm_mode0(	volatile uint16_t * ta0_ccr_reg,
+static inline void updatePwm_mode1(	volatile uint16_t * ta0_ccr_reg,
 									int8_t * incr,
 									uint16_t * next_target_pwm,
 									uint16_t * target_data_src)
@@ -243,49 +245,56 @@ static inline void updatePwm_mode0(	volatile uint16_t * ta0_ccr_reg,
 		*next_target_pwm = *target_data_src;
 
 		// Guard against going beyond the timer bounds:
-		if (*next_target_pwm >= G_MAX_TIMER_VAL)
-			*next_target_pwm = G_MAX_TIMER_VAL;
+		if (*next_target_pwm >= MAX_TIMER_VAL)
+			*next_target_pwm = MAX_TIMER_VAL;
 
-		else if (*next_target_pwm <= G_MIN_TIMER_VAL)
-			*next_target_pwm = G_MIN_TIMER_VAL;
+		else if (*next_target_pwm <= MIN_TIMER_VAL)
+			*next_target_pwm = MIN_TIMER_VAL;
 
 		// Set the incrementer direction.
 		if (*next_target_pwm < tmp_ccr)
-			*incr = -8;
+			*incr = -PWM_INCR;
 		else if (*next_target_pwm > tmp_ccr)
-			*incr = 8;
+			*incr = PWM_INCR;
 	}
 
-	if (tmp_ccr >= G_MAX_TIMER_VAL)
-		tmp_ccr = G_MAX_TIMER_VAL;
+	if (tmp_ccr >= MAX_TIMER_VAL)
+		tmp_ccr = MAX_TIMER_VAL;
 
-	else if (tmp_ccr <= G_MIN_TIMER_VAL)
-		tmp_ccr = G_MIN_TIMER_VAL;
+	else if (tmp_ccr <= MIN_TIMER_VAL)
+		tmp_ccr = MIN_TIMER_VAL;
 
 	*ta0_ccr_reg = tmp_ccr;
 }
 
-static inline void updatePwm0(void)
+
+static inline void handlePwmUpdate(void)
 {
-	static uint16_t next_target_pwm = G_MIN_TIMER_VAL;
+	if (g_sys_status.operating_mode == 1)
+	{
+		updatePwm_mode1(&TA0CCR0,
+				&g_channel_incr[0],
+				&g_channel_next_pwm_target[0],
+				&g_channel_target_vals[0]);
 
-	updatePwm_mode0(&TA0CCR0, &g_channel_incr[0], &next_target_pwm, &g_channel_target_vals[0]);
+		updatePwm_mode1(&TA0CCR1,
+				&g_channel_incr[1],
+				&g_channel_next_pwm_target[1],
+				&g_channel_target_vals[1]);
+
+		updatePwm_mode1(&TA0CCR2,
+				&g_channel_incr[2],
+				&g_channel_next_pwm_target[2],
+				&g_channel_target_vals[2]);
+	}
+	else if (g_sys_status.operating_mode == 2)
+	{
+		updatePwm_mode2(&TA0CCR0, &g_channel_incr[0]);
+		updatePwm_mode2(&TA0CCR1, &g_channel_incr[1]);
+		updatePwm_mode2(&TA0CCR2, &g_channel_incr[2]);
+	}
+	// Otherwise do nothing.
 }
-
-static inline void updatePwm1(void)
-{
-	static uint16_t next_target_pwm = G_MIN_TIMER_VAL;
-
-	updatePwm_mode0(&TA0CCR1, &g_channel_incr[1], &next_target_pwm, &g_channel_target_vals[1]);
-}
-
-static inline void updatePwm2(void)
-{
-	static uint16_t next_target_pwm = G_MIN_TIMER_VAL;
-
-	updatePwm_mode0(&TA0CCR2, &g_channel_incr[2], &next_target_pwm, &g_channel_target_vals[2]);
-}
-
 
 /*
  * Function used to update the PWM target values.
@@ -302,22 +311,36 @@ static inline void updateTargetVals(void)
 		g_channel_target_vals[i] |= (g_raw_adc10_vals[i] & 0x0001);
 	}
 
-	ADC10SA = &g_raw_adc10_vals[0];			// Start the next conversions.
+	ADC10SA = (unsigned int)g_raw_adc10_vals;			// Start the next conversions.
 }
 
 
 static inline void handleButtonPress(void)
 {
-	// Update the operating mode:
-	g_sys_status.operating_mode++;
-	if (g_sys_status.operating_mode == 1)
+	switch (++g_sys_status.operating_mode)
 	{
-		g_channel_incr[0] = 8;
-		g_channel_incr[1] = 8;
-		g_channel_incr[2] = 8;
-		TA0CCR0 = G_MAX_TIMER_VAL;
-		TA0CCR1 = G_MAX_TIMER_VAL;
-		TA0CCR2 = G_MAX_TIMER_VAL;
+		case 3:
+			g_sys_status.operating_mode = 0;
+			// Fall through.
+		case 0:			// Full on mode.
+			TA0CTL &= ~TAIE;	// Turn TA0 overflow interrupt off.
+			while (TA0IV);		// Clear pending TA0 overflow interrupt flag.
+			TA0CCTL0 = OUTMOD_0 | OUT;
+			TA0CCTL1 = OUTMOD_0 | OUT;
+			TA0CCTL2 = OUTMOD_0 | OUT;
+			break;
+		case 1:			// 'Random' mode.
+			g_channel_next_pwm_target[0] = g_channel_target_vals[0];
+			g_channel_next_pwm_target[1] = g_channel_target_vals[1];
+			g_channel_next_pwm_target[2] = g_channel_target_vals[2];
+		case 2:			// Up/down mode.
+			initTimerVals();
+			TA0CCTL0 = OUTMOD_1;
+			TA0CCTL1 = OUTMOD_1;
+			TA0CCTL2 = OUTMOD_1;
+			while (TA0IV);		// Clear pending TA0 overflow interrupt flag.
+			TA0CTL |= TAIE;		// Turn TA0 overflow interrupt on.
+			break;
 	}
 }
 
@@ -329,19 +352,13 @@ __interrupt void WDT_ISR(void)
 	const uint16_t but_down_patt = 0x8000;
 	const uint16_t but_up_patt = 0x7fff;
 	static uint16_t button_history = 0xffff;
-	register uint8_t wake;
 
-	// Check if it's time to wake up to update the PWM.
-	if (++g_sys_status.pwm_tick_count & 3)
-	{
-		g_sys_flags.update_pwm = 1;
-		wake = 1;
-	}
+	register uint8_t wake;
 
 	// Update the button history and check the button state.
 	button_history <<= 1;
 	button_history |= ((P1IN & BIT3) ? 1 : 0);
-	if ( (button_history == but_down_patt) && g_sys_status.button_state )
+	if ( (button_history == but_down_patt) && (g_sys_status.button_state) )
 	{
 		g_sys_status.button_state = 0;
 		g_sys_flags.button_press = 1;
@@ -349,6 +366,12 @@ __interrupt void WDT_ISR(void)
 	}
 	else if ( (button_history == but_up_patt) && (g_sys_status.button_state == 0) )
 		g_sys_status.button_state = 1;
+
+	if (++g_sys_status.pwm_tick_count == 0)
+	{
+		g_sys_flags.update_pwm = 1;
+		wake = 1;
+	}
 
 	if (wake)
 		__bic_SR_register_on_exit(LPM0_bits);
@@ -358,24 +381,27 @@ __interrupt void WDT_ISR(void)
 #pragma vector=TIMER0_A1_VECTOR
 __interrupt void TIMER0_A1_ISR(void)
 {
-	// First reset all of the PWM outputs.
-	TA0CCTL0 = OUTMOD_0;
-	TA0CCTL1 = OUTMOD_0;
-	TA0CCTL2 = OUTMOD_0;
+	if (g_sys_status.operating_mode)
+	{
+		// First reset all of the PWM outputs.
+		TA0CCTL0 = OUTMOD_0;
+		TA0CCTL1 = OUTMOD_0;
+		TA0CCTL2 = OUTMOD_0;
 
-	// Then arm them again ['set' mode].
-	TA0CCTL0 = OUTMOD_1;
-	TA0CCTL1 = OUTMOD_1;
-	TA0CCTL2 = OUTMOD_1;
+		// Then arm them again ['set' mode].
+		TA0CCTL0 = OUTMOD_1;
+		TA0CCTL1 = OUTMOD_1;
+		TA0CCTL2 = OUTMOD_1;
+	}
 
-	// Now read TA0IV to get rid of the interrupt.
+	// Now read TA0IV to clear the interrupt.
 	TA0IV;
 }
 
 // ADC10 interrupt service routine
 // Will fire once all three <g_raw_adc_vals> are filled.
 #pragma vector=ADC10_VECTOR
-__interrupt void ADC10_ISR (void)
+__interrupt void ADC10_ISR(void)
 {
 	g_sys_flags.adc_done = 1;
 	__bic_SR_register_on_exit(LPM0_bits);
