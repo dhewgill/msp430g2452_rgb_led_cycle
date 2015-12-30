@@ -193,9 +193,9 @@ static inline void configAdc10(void)
 
 void initTimerVals(void)
 {
-	g_channel_incr[0] = PWM_INCR;
-	g_channel_incr[1] = PWM_INCR;
-	g_channel_incr[2] = PWM_INCR;
+	g_channel_incr[0] = -PWM_INCR;
+	g_channel_incr[1] = -PWM_INCR;
+	g_channel_incr[2] = -PWM_INCR;
 	TA0CCR0 = MAX_TIMER_VAL;
 	TA0CCR1 = MAX_TIMER_VAL;
 	TA0CCR2 = MAX_TIMER_VAL;
