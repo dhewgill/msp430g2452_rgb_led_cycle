@@ -196,9 +196,9 @@ void initTimerVals(void)
 	g_channel_incr[0] = PWM_INCR;
 	g_channel_incr[1] = PWM_INCR;
 	g_channel_incr[2] = PWM_INCR;
-	TA0CCR0 = MIN_TIMER_VAL;
-	TA0CCR1 = MIN_TIMER_VAL;
-	TA0CCR2 = MIN_TIMER_VAL;
+	TA0CCR0 = MAX_TIMER_VAL;
+	TA0CCR1 = MAX_TIMER_VAL;
+	TA0CCR2 = MAX_TIMER_VAL;
 }
 
 
