@@ -80,7 +80,7 @@ int main(void)
     DCOCTL = CALDCO_16MHZ;			// Set clock to 16MHz
 	
     configPort1();					// Configure Port1.
-    configAdc10();
+    configAdc10();					// Configure the ADC10.
     configWDT();					// Configure the watchdog timer.
     __delay_cycles(16384);			// Force an offset between TA0 and WDT rollovers as they are both sourced from SMCLK.
     configTimerA();					// Configure TimerA0.
