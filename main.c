@@ -16,8 +16,8 @@
 #define F_MCLK			16000000ul
 #define F_SMCLK			16000000ul
 
-#define MIN_TIMER_VAL	((uint16_t) 128)
-#define MAX_TIMER_VAL	((uint16_t) 65408)
+#define MIN_TIMER_VAL	((uint16_t) 64)
+#define MAX_TIMER_VAL	((uint16_t) 65472)
 #define PWM_INCR		((int8_t) 16)
 
 /* Function Prototypes */
@@ -26,11 +26,11 @@ static inline void configTimerA(void);
 static inline void configWDT(void);
 static inline void configAdc10(void);
 void initTimerVals(void);
-static inline void updatePwm_mode2(volatile uint16_t * ta0_ccr_reg, int8_t * incr);
-static inline void updatePwm_mode1(	volatile uint16_t * ta0_ccr_reg,
-									int8_t * incr,
-									uint16_t * next_target_pwm,
-									uint16_t * target_data_src);
+static inline void updatePwm_mode_upDn(volatile uint16_t * ta0_ccr_reg, int8_t * incr);
+static inline void updatePwm_mode_rnd( volatile uint16_t * ta0_ccr_reg,
+									   int8_t * incr,
+									   uint16_t * next_target_pwm,
+									   uint16_t * target_data_src );
 static inline void handlePwmUpdate(void);
 static inline void updateTargetVals(void);
 static inline void handleButtonPress(void);
@@ -205,7 +205,7 @@ void initTimerVals(void)
 /*
  * Update the Timer0 CCRs to shift the PWM point.
  */
-static inline void updatePwm_mode2(volatile uint16_t * ta0_ccr_reg, int8_t * incr)
+static inline void updatePwm_mode_upDn(volatile uint16_t * ta0_ccr_reg, int8_t * incr)
 {
 	register uint16_t tmp_ccr;
 
@@ -228,7 +228,7 @@ static inline void updatePwm_mode2(volatile uint16_t * ta0_ccr_reg, int8_t * inc
 }
 
 
-static inline void updatePwm_mode1(	volatile uint16_t * ta0_ccr_reg,
+static inline void updatePwm_mode_rnd(	volatile uint16_t * ta0_ccr_reg,
 									int8_t * incr,
 									uint16_t * next_target_pwm,
 									uint16_t * target_data_src)
@@ -270,28 +270,28 @@ static inline void updatePwm_mode1(	volatile uint16_t * ta0_ccr_reg,
 
 static inline void handlePwmUpdate(void)
 {
-	if (g_sys_status.operating_mode == 1)
+	if (g_sys_status.operating_mode == 1 || g_sys_status.operating_mode == 2)
 	{
-		updatePwm_mode1(&TA0CCR0,
+		updatePwm_mode_rnd(&TA0CCR0,
 				&g_channel_incr[0],
 				&g_channel_next_pwm_target[0],
 				&g_channel_target_vals[0]);
 
-		updatePwm_mode1(&TA0CCR1,
+		updatePwm_mode_rnd(&TA0CCR1,
 				&g_channel_incr[1],
 				&g_channel_next_pwm_target[1],
 				&g_channel_target_vals[1]);
 
-		updatePwm_mode1(&TA0CCR2,
+		updatePwm_mode_rnd(&TA0CCR2,
 				&g_channel_incr[2],
 				&g_channel_next_pwm_target[2],
 				&g_channel_target_vals[2]);
 	}
-	else if (g_sys_status.operating_mode == 2)
+	else if (g_sys_status.operating_mode == 3)
 	{
-		updatePwm_mode2(&TA0CCR0, &g_channel_incr[0]);
-		updatePwm_mode2(&TA0CCR1, &g_channel_incr[1]);
-		updatePwm_mode2(&TA0CCR2, &g_channel_incr[2]);
+		updatePwm_mode_upDn(&TA0CCR0, &g_channel_incr[0]);
+		updatePwm_mode_upDn(&TA0CCR1, &g_channel_incr[1]);
+		updatePwm_mode_upDn(&TA0CCR2, &g_channel_incr[2]);
 	}
 	// Otherwise do nothing.
 }
@@ -319,9 +319,6 @@ static inline void handleButtonPress(void)
 {
 	switch (++g_sys_status.operating_mode)
 	{
-		case 3:
-			g_sys_status.operating_mode = 0;
-			// Fall through.
 		case 0:			// Full on mode.
 			TA0CTL &= ~TAIE;	// Turn TA0 overflow interrupt off.
 			while (TA0IV);		// Clear pending TA0 overflow interrupt flag.
@@ -333,7 +330,6 @@ static inline void handleButtonPress(void)
 			g_channel_next_pwm_target[0] = g_channel_target_vals[0];
 			g_channel_next_pwm_target[1] = g_channel_target_vals[1];
 			g_channel_next_pwm_target[2] = g_channel_target_vals[2];
-		case 2:			// Up/down mode.
 			initTimerVals();
 			TA0CCTL0 = OUTMOD_1;
 			TA0CCTL1 = OUTMOD_1;
@@ -341,6 +337,20 @@ static inline void handleButtonPress(void)
 			while (TA0IV);		// Clear pending TA0 overflow interrupt flag.
 			TA0CTL |= TAIE;		// Turn TA0 overflow interrupt on.
 			break;
+		case 2:			// 'Random fast' mode.
+			g_channel_next_pwm_target[0] = g_channel_target_vals[0];
+			g_channel_next_pwm_target[1] = g_channel_target_vals[1];
+			g_channel_next_pwm_target[2] = g_channel_target_vals[2];
+			initTimerVals();
+			g_channel_incr[0] *= 4;
+			g_channel_incr[1] *= 4;
+			g_channel_incr[2] *= 4;
+			break;
+		case 3:			// Up/down mode.
+			initTimerVals();
+			break;
+		default:
+			__never_executed();
 	}
 }
 
