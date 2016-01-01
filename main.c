@@ -9,6 +9,16 @@
  * set to ~2ms period.
  * MCLK = SMCLK = 16MHz.
  * WDT and TA are sourced from SMCLK.
+ * The RGB outputs come are:
+ * P1.1 [TA0.0]
+ * P1.4 [TA0.2]
+ * P1.6 [TA0.1]
+ *
+ * There are 4 modes of operation:
+ * Mode 0: Steady on.
+ * Mode 1: 'Random' mode.
+ * Mode 2: 'Random fast' mode.
+ * Mode 3: Up/Down mode.
  */
 
 /* Preprocessor Defines */
