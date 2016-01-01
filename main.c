@@ -224,13 +224,11 @@ static inline void updatePwm_mode_upDn(volatile uint16_t * ta0_ccr_reg, int8_t *
 	if (tmp_ccr <= MIN_TIMER_VAL)
 	{
 		tmp_ccr = MIN_TIMER_VAL;
-		//*incr *= -1;
 		*incr = PWM_INCR;
 	}
 	else if (tmp_ccr >= MAX_TIMER_VAL)
 	{
 		tmp_ccr = MAX_TIMER_VAL;
-		//*incr *= -1;
 		*incr = -PWM_INCR;
 	}
 
