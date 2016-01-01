@@ -71,14 +71,24 @@ uint16_t g_channel_next_pwm_target[NUM_CHANNELS] = {MIN_TIMER_VAL, MIN_TIMER_VAL
 uint16_t g_raw_adc10_vals[NUM_CHANNELS] = {0, 0, 0};
 
 
-int main(void)
+/*
+ * The _system_pre_init() function will run before the global variables are initialized.
+ * It's a good place to stop the watchdog and set the system freq, etc...
+ * Just don't do anything that requires global variables yet!
+ * The 'return 1' is necessary to init globals on function exit.
+ */
+int _system_pre_init(void)
 {
     WDTCTL = WDTPW | WDTHOLD;		// Stop watchdog timer
 
     DCOCTL = 0;
     BCSCTL1 = CALBC1_16MHZ;
     DCOCTL = CALDCO_16MHZ;			// Set clock to 16MHz
-	
+
+	return 1;
+}
+int main(void)
+{
     configPort1();					// Configure Port1.
     configAdc10();					// Configure the ADC10.
     configWDT();					// Configure the watchdog timer.
