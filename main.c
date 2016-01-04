@@ -207,7 +207,7 @@ static inline void configAdc10(void)
 	ADC10DTC1 = NUM_CHANNELS;
 	ADC10CTL1 = INCH_10 | ADC10DIV_7 | ADC10SSEL_3 | CONSEQ_2;
 	ADC10CTL0 = SREF_1 | ADC10SHT_3 | MSC | REFON | ADC10ON | ADC10IE | ENC | ADC10SC;
-	ADC10SA = (unsigned int)g_raw_adc10_vals;
+	ADC10SA = (unsigned int)&g_raw_adc10_vals[0];
 }
 
 
@@ -329,7 +329,7 @@ static inline void updateTargetVals(void)
 		g_channel_target_vals[i] |= (g_raw_adc10_vals[i] & 0x0001);
 	}
 
-	ADC10SA = (unsigned int)g_raw_adc10_vals;			// Start the next conversions.
+	ADC10SA = (unsigned int)&g_raw_adc10_vals[0];			// Start the next conversions.
 }
 
 
