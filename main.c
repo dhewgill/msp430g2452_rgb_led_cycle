@@ -110,7 +110,7 @@ int main(void)
 
     initTimerVals();
     __enable_interrupt();
-    while (1)						// Main Loop
+    for (;;)						// Main Loop
     {
     	if (g_sys_flags.update_pwm)
     	{
