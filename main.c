@@ -1,11 +1,7 @@
-#include <msp430.h>
-#include <stdint.h>
-
-
 /*
  * This is a small program that uses the 3 outputs of TimerA
  * on the MSP430G2452 to drive each output of a RGB LED.
- * The "system tick" is provided by the WDT in interval mod and is
+ * The "system tick" is provided by the WDT in interval mode and is
  * set to ~2ms period.
  * MCLK = SMCLK = 16MHz.
  * WDT and TA are sourced from SMCLK.
@@ -14,12 +10,20 @@
  * P1.4 [TA0.2]
  * P1.6 [TA0.1]
  *
+ * The source of entropy for the 'random' modes is the LSB of the
+ * internal temperature sensor.  The LSB is shifted in after every
+ * ADC conversion and a new target value for the pwm is created.
+ *
  * There are 4 modes of operation:
  * Mode 0: Steady on.
  * Mode 1: 'Random' mode.
  * Mode 2: 'Random fast' mode.
  * Mode 3: Up/Down mode.
  */
+
+#include <msp430.h>
+#include <stdint.h>
+
 
 /* Preprocessor Defines */
 #define NUM_CHANNELS	3
