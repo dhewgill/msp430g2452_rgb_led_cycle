@@ -33,6 +33,8 @@
 #define MIN_TIMER_VAL	((uint16_t) 64)
 #define MAX_TIMER_VAL	((uint16_t) 65472)
 #define PWM_INCR		((int8_t) 16)
+#define RND_FAST_MULT	((int8_t) 4)
+
 
 /* Function Prototypes */
 static inline void configPort1(void);
@@ -278,6 +280,9 @@ static inline void updatePwm_mode_rnd(	volatile uint16_t * ta0_ccr_reg,
 			*incr = -PWM_INCR;
 		else if (*next_target_pwm > tmp_ccr)
 			*incr = PWM_INCR;
+
+		if (g_sys_status.operating_mode == 2)
+			*incr *= RND_FAST_MULT;
 	}
 
 	if (tmp_ccr >= MAX_TIMER_VAL)
@@ -343,7 +348,7 @@ static inline void handleButtonPress(void)
 	{
 		case 0:			// Full on mode.
 			TA0CTL &= ~TAIE;	// Turn TA0 overflow interrupt off.
-			while (TA0IV);		// Clear pending TA0 overflow interrupt flag.
+			while (TA0IV);		// Clear pending TA0 overflow interrupt flag(s).
 			TA0CCTL0 = OUTMOD_0 | OUT;
 			TA0CCTL1 = OUTMOD_0 | OUT;
 			TA0CCTL2 = OUTMOD_0 | OUT;
@@ -356,7 +361,7 @@ static inline void handleButtonPress(void)
 			TA0CCTL0 = OUTMOD_1;
 			TA0CCTL1 = OUTMOD_1;
 			TA0CCTL2 = OUTMOD_1;
-			while (TA0IV);		// Clear pending TA0 overflow interrupt flag.
+			while (TA0IV);		// Clear pending TA0 overflow interrupt flag(s).
 			TA0CTL |= TAIE;		// Turn TA0 overflow interrupt on.
 			break;
 		case 2:			// 'Random fast' mode.
@@ -364,9 +369,9 @@ static inline void handleButtonPress(void)
 			g_channel_next_pwm_target[1] = g_channel_target_vals[1];
 			g_channel_next_pwm_target[2] = g_channel_target_vals[2];
 			initTimerVals();
-			g_channel_incr[0] *= 4;
-			g_channel_incr[1] *= 4;
-			g_channel_incr[2] *= 4;
+			g_channel_incr[0] *= RND_FAST_MULT;
+			g_channel_incr[1] *= RND_FAST_MULT;
+			g_channel_incr[2] *= RND_FAST_MULT;
 			break;
 		case 3:			// Up/down mode.
 			initTimerVals();
