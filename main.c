@@ -280,6 +280,9 @@ static inline void updatePwm_mode_rnd(	volatile uint16_t * ta0_ccr_reg,
 			*incr = -PWM_INCR;
 		else if (*next_target_pwm > tmp_ccr)
 			*incr = PWM_INCR;
+
+		if (g_sys_status.operating_mode == 2)
+			*incr *= RND_FAST_MULT;
 	}
 
 	if (tmp_ccr >= MAX_TIMER_VAL)
