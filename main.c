@@ -277,12 +277,9 @@ static inline void updatePwm_mode_rnd(	volatile uint16_t * ta0_ccr_reg,
 
 		// Set the incrementer direction.
 		if (*next_target_pwm < tmp_ccr)
-			*incr = -PWM_INCR;
+			*incr = (g_sys_status.operating_mode == 2) ? -PWM_INCR * RND_FAST_MULT : -PWM_INCR;
 		else if (*next_target_pwm > tmp_ccr)
-			*incr = PWM_INCR;
-
-		if (g_sys_status.operating_mode == 2)
-			*incr *= RND_FAST_MULT;
+			*incr = (g_sys_status.operating_mode == 2) ? PWM_INCR * RND_FAST_MULT : PWM_INCR;
 	}
 
 	if (tmp_ccr >= MAX_TIMER_VAL)
