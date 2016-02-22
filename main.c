@@ -30,8 +30,8 @@
 #define F_MCLK			16000000ul
 #define F_SMCLK			16000000ul
 
-#define MIN_TIMER_VAL	((uint16_t) 128)
-#define MAX_TIMER_VAL	((uint16_t) 65408)
+#define MIN_TIMER_VAL	((uint16_t) 96)
+#define MAX_TIMER_VAL	((uint16_t) 65440)
 #define PWM_INCR		((int8_t) 16)
 #define RND_FAST_MULT	((int8_t) 4)
 
