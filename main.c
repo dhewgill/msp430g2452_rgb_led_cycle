@@ -5,7 +5,7 @@
  * set to ~2ms period.
  * MCLK = SMCLK = 16MHz.
  * WDT and TA are sourced from SMCLK.
- * The RGB outputs come are:
+ * The RGB outputs are:
  * P1.1 [TA0.0]
  * P1.4 [TA0.2]
  * P1.6 [TA0.1]
